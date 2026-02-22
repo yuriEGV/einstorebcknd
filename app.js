@@ -29,14 +29,55 @@ const notFoundMiddleware = require('./middleware/not-found');
 const errorHandlerMiddleware = require('./middleware/error-handler');
 
 app.set('trust proxy', 1);
+
+// Aggressive rate limiting for auth endpoints
+const authLimiter = rateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 20, // Lower limit for security
+  message: 'Too many requests from this IP, please try again after 15 minutes',
+});
+app.use('/api/v1/auth', authLimiter);
+
 app.use(
   rateLimiter({
     windowMs: 15 * 60 * 1000,
-    max: 60,
+    max: 100,
   })
 );
-app.use(helmet());
-app.use(cors());
+
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        imgSrc: ["'self'", "data:", "https://*"],
+        connectSrc: ["'self'", "https://api.mercadopago.com"],
+      },
+    },
+  })
+);
+
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://einstorefrntnd.vercel.app',
+  process.env.FRONTEND_URL,
+].filter(Boolean);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true,
+  })
+);
+
 app.use(xss());
 app.use(mongoSanitize());
 

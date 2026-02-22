@@ -17,8 +17,9 @@ const attachCookiesToResponse = ({ res, user }) => {
   res.cookie('token', token, {
     httpOnly: true,
     expires: new Date(Date.now() + oneDay),
-    secure: process.env.NODE_ENV === 'production',
+    secure: true, // Always secure for enterprise
     signed: true,
+    sameSite: 'none', // Needed for cross-origin Vercel deployments
   });
 };
 

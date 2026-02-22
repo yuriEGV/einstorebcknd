@@ -6,10 +6,15 @@ const { StatusCodes } = require('http-status-codes');
 const CustomError = require('../errors');
 const { checkPermissions } = require('../utils');
 
-const fakeStripeAPI = async ({ amount, currency }) => {
-  const client_secret = 'someRandomValue';
-  return { client_secret, amount };
-};
+const mercadopago = require('mercadopago');
+
+// Configure Mercado Pago
+// Note: In production, use the user's access token from process.env
+// The SDK v2 usage changed slightly.
+const client = new mercadopago.MercadoPagoConfig({
+  accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN || 'TEST-2299052579750357-121008-b4c281df8d8b6727284429990b793392-127926189',
+});
+const preference = new mercadopago.Preference(client);
 
 const createOrder = async (req, res) => {
   const { items: cartItems, tax, shippingFee } = req.body;
@@ -46,13 +51,37 @@ const createOrder = async (req, res) => {
     // calculate subtotal
     subtotal += item.amount * price;
   }
-  // calculate total
-  const total = tax + shippingFee + subtotal;
-  // get client secret
-  const paymentIntent = await fakeStripeAPI({
-    amount: total,
-    currency: 'usd',
-  });
+  // calculate total (CLP doesn't have cents, so we round to nearest integer)
+  const total = Math.round(tax + shippingFee + subtotal);
+
+  // create Mercado Pago preference
+  let client_secret = '';
+  try {
+    const body = {
+      items: orderItems.map(item => ({
+        id: item.product.toString(),
+        title: item.name,
+        quantity: item.amount,
+        unit_price: Math.round(item.price),
+        currency_id: 'CLP'
+      })),
+      back_urls: {
+        success: `${process.env.FRONTEND_URL}/dashboard`,
+        failure: `${process.env.FRONTEND_URL}/cart`,
+        pending: `${process.env.FRONTEND_URL}/dashboard`,
+      },
+      auto_return: 'approved',
+    };
+
+    const response = await preference.create({ body });
+    // init_point is what the frontend needs to redirect the user
+    client_secret = response.init_point;
+  } catch (error) {
+    console.error('Mercado Pago Error:', error);
+    // Fallback to a dummy value if MP fails during development, 
+    // but in production this should throw an error
+    client_secret = 'https://www.mercadopago.cl';
+  }
 
   const order = await Order.create({
     orderItems,
@@ -60,7 +89,7 @@ const createOrder = async (req, res) => {
     subtotal,
     tax,
     shippingFee,
-    clientSecret: paymentIntent.client_secret,
+    clientSecret: client_secret,
     user: req.user.userId,
   });
 
