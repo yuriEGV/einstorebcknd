@@ -4,7 +4,7 @@ const CustomError = require('../errors');
 const { attachCookiesToResponse, createTokenUser } = require('../utils');
 
 const register = async (req, res) => {
-  const { email, name, password } = req.body;
+  const { email, name, password, dni, phone } = req.body;
 
   const emailAlreadyExists = await User.findOne({ email });
   if (emailAlreadyExists) {
@@ -15,7 +15,7 @@ const register = async (req, res) => {
   const isFirstAccount = (await User.countDocuments({})) === 0;
   const role = isFirstAccount ? 'admin' : 'user';
 
-  const user = await User.create({ name, email, password, role });
+  const user = await User.create({ name, email, password, role, dni, phone });
   const tokenUser = createTokenUser(user);
   attachCookiesToResponse({ res, user: tokenUser });
   res.status(StatusCodes.CREATED).json({ user: tokenUser });
@@ -49,7 +49,8 @@ const logout = async (req, res) => {
 };
 
 const showMe = async (req, res) => {
-  res.status(StatusCodes.OK).json({ user: req.user });
+  const user = await User.findById(req.user.userId).select('-password');
+  res.status(StatusCodes.OK).json({ user });
 };
 
 module.exports = {
