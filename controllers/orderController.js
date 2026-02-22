@@ -17,7 +17,7 @@ const client = new mercadopago.MercadoPagoConfig({
 const preference = new mercadopago.Preference(client);
 
 const createOrder = async (req, res) => {
-  const { items: cartItems, tax, shippingFee } = req.body;
+  const { items: cartItems, tax, shippingFee, shippingAddress } = req.body;
 
   if (!cartItems || cartItems.length < 1) {
     throw new CustomError.BadRequestError('No cart items provided');
@@ -76,6 +76,7 @@ const createOrder = async (req, res) => {
     const response = await preference.create({ body });
     // init_point is what the frontend needs to redirect the user
     client_secret = response.init_point;
+    preference_id = response.id;
   } catch (error) {
     console.error('Mercado Pago Error:', error);
     // Fallback to a dummy value if MP fails during development, 
@@ -89,13 +90,15 @@ const createOrder = async (req, res) => {
     subtotal,
     tax,
     shippingFee,
+    shippingAddress,
     clientSecret: client_secret,
+    preferenceId: preference_id,
     user: req.user.userId,
   });
 
   res
     .status(StatusCodes.CREATED)
-    .json({ order, clientSecret: order.clientSecret });
+    .json({ order });
 };
 const getAllOrders = async (req, res) => {
   const orders = await Order.find({});

@@ -45,6 +45,12 @@ const OrderSchema = mongoose.Schema(
       type: String,
       required: true,
     },
+    preferenceId: {
+      type: String,
+    },
+    shippingAddress: {
+      type: String,
+    },
     paymentIntentId: {
       type: String,
     },

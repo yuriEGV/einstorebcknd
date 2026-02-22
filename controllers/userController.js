@@ -95,6 +95,20 @@ const updateRole = async (req, res) => {
   res.status(StatusCodes.OK).json({ msg: 'Success! Role updated.' });
 };
 
+const toggleVerifySeller = async (req, res) => {
+  const { id: userId } = req.params;
+
+  const user = await User.findOne({ _id: userId });
+  if (!user) {
+    throw new CustomError.NotFoundError(`No user with id : ${userId}`);
+  }
+
+  user.isVerifiedSeller = !user.isVerifiedSeller;
+  await user.save();
+
+  res.status(StatusCodes.OK).json({ msg: `Success! Seller verified status: ${user.isVerifiedSeller}` });
+};
+
 module.exports = {
   getAllUsers,
   getSingleUser,
@@ -103,6 +117,7 @@ module.exports = {
   updateUserPassword,
   deleteUser,
   updateRole,
+  toggleVerifySeller,
 };
 
 // update user with findOneAndUpdate

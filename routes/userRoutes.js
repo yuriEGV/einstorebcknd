@@ -11,6 +11,7 @@ const {
   updateUser,
   updateUserPassword,
   updateRole,
+  toggleVerifySeller,
   deleteUser,
 } = require('../controllers/userController');
 
@@ -22,6 +23,7 @@ router.route('/showMe').get(authenticateUser, showCurrentUser);
 router.route('/updateUser').patch(authenticateUser, updateUser);
 router.route('/updateUserPassword').patch(authenticateUser, updateUserPassword);
 router.route('/updateRole/:id').patch(authenticateUser, authorizePermissions('admin'), updateRole);
+router.route('/toggle-verify/:id').patch(authenticateUser, authorizePermissions('admin'), toggleVerifySeller);
 
 router
   .route('/:id')
