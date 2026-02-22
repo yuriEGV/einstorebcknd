@@ -72,7 +72,7 @@ const deleteUser = async (req, res) => {
     throw new CustomError.BadRequestError('Cannot delete yourself');
   }
 
-  await user.remove();
+  await User.deleteOne({ _id: userId });
   res.status(StatusCodes.OK).json({ msg: 'Success! User removed.' });
 };
 

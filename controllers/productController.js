@@ -9,7 +9,12 @@ const createProduct = async (req, res) => {
   res.status(StatusCodes.CREATED).json({ product });
 };
 const getAllProducts = async (req, res) => {
-  const products = await Product.find({});
+  const { user } = req.query;
+  const queryObject = {};
+  if (user) {
+    queryObject.user = user;
+  }
+  const products = await Product.find(queryObject);
 
   res.status(StatusCodes.OK).json({ products, count: products.length });
 };
@@ -72,13 +77,23 @@ const uploadImage = async (req, res) => {
 
   // Ensure directory exists
   const fs = require('fs');
-  if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
+  try {
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+  } catch (err) {
+    console.error('Directory error:', err);
   }
 
   const imagePath = path.join(uploadsDir, `${productImage.name}`);
-  await productImage.mv(imagePath);
-  res.status(StatusCodes.OK).json({ image: `/uploads/${productImage.name}` });
+
+  try {
+    await productImage.mv(imagePath);
+    res.status(StatusCodes.OK).json({ image: `/uploads/${productImage.name}` });
+  } catch (err) {
+    console.error('Move error:', err);
+    throw new CustomError.BadRequestError(`Upload failed: ${err.message}`);
+  }
 };
 
 module.exports = {
