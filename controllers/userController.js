@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const Product = require('../models/Product');
 const { StatusCodes } = require('http-status-codes');
 const CustomError = require('../errors');
 const {
@@ -76,8 +77,11 @@ const deleteUser = async (req, res) => {
     throw new CustomError.BadRequestError('Cannot delete yourself');
   }
 
+  // Cascading delete products
+  await Product.deleteMany({ user: userId });
+
   await User.deleteOne({ _id: userId });
-  res.status(StatusCodes.OK).json({ msg: 'Success! User removed.' });
+  res.status(StatusCodes.OK).json({ msg: 'Success! User and their products removed.' });
 };
 
 const updateRole = async (req, res) => {
