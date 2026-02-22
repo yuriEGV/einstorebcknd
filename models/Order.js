@@ -54,6 +54,15 @@ const OrderSchema = mongoose.Schema(
     paymentIntentId: {
       type: String,
     },
+    disputeStatus: {
+      type: String,
+      enum: ['none', 'open', 'resolved'],
+      default: 'none',
+    },
+    isChatBlocked: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

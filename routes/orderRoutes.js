@@ -13,6 +13,8 @@ const {
   createOrder,
   updateOrder,
   getDashboardStats,
+  createDispute,
+  resolveDispute,
 } = require('../controllers/orderController');
 
 router.route('/stats/dashboard').get(authenticateUser, getDashboardStats);
@@ -24,6 +26,9 @@ router
 
 router.route('/showAllMyOrders').get(authenticateUser, getCurrentUserOrders);
 router.route('/showMySales').get(authenticateUser, getSellerOrders);
+
+router.route('/:id/dispute').post(authenticateUser, createDispute);
+router.route('/:id/resolve').patch(authenticateUser, authorizePermissions('admin'), resolveDispute);
 
 router
   .route('/:id')

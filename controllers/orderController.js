@@ -241,6 +241,62 @@ const getSellerOrders = async (req, res) => {
   res.status(StatusCodes.OK).json({ orders: sellerOrders, count: sellerOrders.length });
 };
 
+const createDispute = async (req, res) => {
+  const { id: orderId } = req.params;
+  const order = await Order.findOne({ _id: orderId });
+
+  if (!order) {
+    throw new CustomError.NotFoundError(`No order with id : ${orderId}`);
+  }
+
+  // Only buyer can open a dispute
+  if (order.user.toString() !== req.user.userId && req.user.role !== 'admin') {
+    throw new CustomError.UnauthorizedError('Only the buyer can open a dispute');
+  }
+
+  if (order.status !== 'paid' && order.status !== 'delivered') {
+    throw new CustomError.BadRequestError('Disputes can only be opened for paid or delivered orders');
+  }
+
+  order.disputeStatus = 'open';
+  order.isChatBlocked = true; // Lock chat for admin review
+
+  await order.save();
+  res.status(StatusCodes.OK).json({ order, msg: 'Dispute opened and chat secured for review.' });
+};
+
+const resolveDispute = async (req, res) => {
+  const { id: orderId } = req.params;
+  const { resolution } = req.body; // e.g. 'refund' or 'release_funds'
+
+  if (req.user.role !== 'admin') {
+    throw new CustomError.UnauthorizedError('Only administrators can resolve disputes');
+  }
+
+  const order = await Order.findOne({ _id: orderId });
+  if (!order) {
+    throw new CustomError.NotFoundError(`No order with id : ${orderId}`);
+  }
+
+  if (order.disputeStatus !== 'open') {
+    throw new CustomError.BadRequestError('Order is not under dispute');
+  }
+
+  order.disputeStatus = 'resolved';
+  order.isChatBlocked = false; // Optional: keep blocked or unblock
+
+  if (resolution === 'refund') {
+    order.status = 'canceled';
+    // Logic for refund would go here
+  } else if (resolution === 'release_funds') {
+    order.status = 'delivered';
+    // Logic for marking as fully completed
+  }
+
+  await order.save();
+  res.status(StatusCodes.OK).json({ order, msg: `Dispute resolved with: ${resolution}` });
+};
+
 module.exports = {
   getAllOrders,
   getSingleOrder,
@@ -249,4 +305,6 @@ module.exports = {
   createOrder,
   updateOrder,
   getDashboardStats,
+  createDispute,
+  resolveDispute,
 };

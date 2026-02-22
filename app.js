@@ -1,10 +1,8 @@
 require('dotenv').config();
 require('express-async-errors');
-// express
 
 const express = require('express');
 const app = express();
-// rest of the packages
 const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
 const fileUpload = require('express-fileupload');
@@ -17,26 +15,19 @@ const mongoSanitize = require('express-mongo-sanitize');
 // database
 const connectDB = require('./db/connect');
 
-//  routers
+// routers
 const authRouter = require('./routes/authRoutes');
 const userRouter = require('./routes/userRoutes');
 const productRouter = require('./routes/productRoutes');
 const reviewRouter = require('./routes/reviewRoutes');
 const orderRouter = require('./routes/orderRoutes');
+const messageRouter = require('./routes/messageRoutes');
 
 // middleware
 const notFoundMiddleware = require('./middleware/not-found');
 const errorHandlerMiddleware = require('./middleware/error-handler');
 
 app.set('trust proxy', 1);
-
-// Aggressive rate limiting for auth endpoints
-const authLimiter = rateLimiter({
-  windowMs: 15 * 60 * 1000,
-  max: 20, // Lower limit for security
-  message: 'Too many requests from this IP, please try again after 15 minutes',
-});
-app.use('/api/v1/auth', authLimiter);
 
 app.use(
   rateLimiter({
@@ -88,7 +79,7 @@ app.use(express.static('./public'));
 app.use(fileUpload());
 
 app.get('/', (req, res) => {
-  res.send('<h1>Einstore API is running</h1><p>Visit <a href="/api/v1/products">/api/v1/products</a> to see products.</p>');
+  res.send('<h1>Einstore API is running</h1>');
 });
 
 app.use('/api/v1/auth', authRouter);
@@ -96,6 +87,7 @@ app.use('/api/v1/users', userRouter);
 app.use('/api/v1/products', productRouter);
 app.use('/api/v1/reviews', reviewRouter);
 app.use('/api/v1/orders', orderRouter);
+app.use('/api/v1/messages', messageRouter);
 
 app.use(notFoundMiddleware);
 app.use(errorHandlerMiddleware);
@@ -111,9 +103,7 @@ const start = async () => {
     }
     console.log('Successfully connected to MongoDB');
   } catch (error) {
-    console.log('Error connecting to MongoDB:');
     console.log(error);
-    process.exit(1);
   }
 };
 
