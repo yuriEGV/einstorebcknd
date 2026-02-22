@@ -58,13 +58,21 @@ const createOrder = async (req, res) => {
   let client_secret = '';
   try {
     const body = {
-      items: orderItems.map(item => ({
-        id: item.product.toString(),
-        title: item.name,
-        quantity: item.amount,
-        unit_price: Math.round(item.price),
-        currency_id: 'CLP'
-      })),
+      items: [
+        ...orderItems.map(item => ({
+          id: item.product.toString(),
+          title: item.name,
+          quantity: item.amount,
+          unit_price: Math.round(item.price),
+          currency_id: 'CLP'
+        })),
+        {
+          title: 'Comisión de Gestión (Platform Fee)',
+          quantity: 1,
+          unit_price: Math.round(shippingFee),
+          currency_id: 'CLP'
+        }
+      ],
       back_urls: {
         success: `${process.env.FRONTEND_URL}/dashboard`,
         failure: `${process.env.FRONTEND_URL}/cart`,
@@ -123,18 +131,42 @@ const getCurrentUserOrders = async (req, res) => {
 };
 const updateOrder = async (req, res) => {
   const { id: orderId } = req.params;
-  const { paymentIntentId } = req.body;
+  const { status, paymentIntentId } = req.body;
 
   const order = await Order.findOne({ _id: orderId });
   if (!order) {
     throw new CustomError.NotFoundError(`No order with id : ${orderId}`);
   }
-  checkPermissions(req.user, order.user);
 
-  order.paymentIntentId = paymentIntentId;
-  order.status = 'paid';
+  // If status is 'shipped', verify requester is the/a seller of products in this order
+  if (status === 'shipped') {
+    let isSeller = false;
+    for (const item of order.orderItems) {
+      const product = await Product.findOne({ _id: item.product });
+      if (product && product.user.toString() === req.user.userId) {
+        isSeller = true;
+        break;
+      }
+    }
+    if (!isSeller && req.user.role !== 'admin') {
+      throw new CustomError.UnauthorizedError('Only the seller can mark as shipped');
+    }
+    order.status = 'shipped';
+  }
+  // If status is 'delivered', verify requester is the buyer
+  else if (status === 'delivered') {
+    if (order.user.toString() !== req.user.userId && req.user.role !== 'admin') {
+      throw new CustomError.UnauthorizedError('Only the buyer can confirm delivery');
+    }
+    order.status = 'delivered';
+  }
+  // Default legacy behavior for payment completion
+  else if (paymentIntentId) {
+    order.paymentIntentId = paymentIntentId;
+    order.status = 'paid';
+  }
+
   await order.save();
-
   res.status(StatusCodes.OK).json({ order });
 };
 
