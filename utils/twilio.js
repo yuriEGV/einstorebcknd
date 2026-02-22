@@ -24,4 +24,27 @@ const sendWhatsAppNotification = async (to, productName, orderId) => {
     }
 };
 
-module.exports = { sendWhatsAppNotification };
+const sendOrderNotification = async (to, role, orderId, total) => {
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const fromWhatsApp = process.env.TWILIO_WHATSAPP_FROM || 'whatsapp:+14155238886';
+
+    if (!accountSid || !authToken) return;
+
+    const client = twilio(accountSid, authToken);
+    const body = role === 'admin'
+        ? `🏦 [Admin] ¡Nueva venta completada! Orden: #${orderId.slice(-6).toUpperCase()}. Total: $${total}. Revisa el dashboard.`
+        : `💰 ¡Venta realizada! Tienes una nueva orden #${orderId.slice(-6).toUpperCase()} por $${total}. Prepárala para envío.`;
+
+    try {
+        await client.messages.create({
+            body,
+            from: fromWhatsApp,
+            to: `whatsapp:${to}`,
+        });
+    } catch (error) {
+        console.error('Twilio Order Notification Error:', error);
+    }
+};
+
+module.exports = { sendWhatsAppNotification, sendOrderNotification };

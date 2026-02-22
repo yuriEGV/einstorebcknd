@@ -59,7 +59,11 @@ const OrderSchema = mongoose.Schema(
       enum: ['none', 'open', 'resolved'],
       default: 'none',
     },
-    isChatBlocked: {
+    isAdminNotified: {
+      type: Boolean,
+      default: false,
+    },
+    isSellerNotified: {
       type: Boolean,
       default: false,
     },

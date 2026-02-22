@@ -15,9 +15,13 @@ const {
   getDashboardStats,
   createDispute,
   resolveDispute,
+  markOrdersAsNotified,
+  processAutomaticReleases,
 } = require('../controllers/orderController');
 
 router.route('/stats/dashboard').get(authenticateUser, getDashboardStats);
+router.route('/mark-as-notified').patch(authenticateUser, markOrdersAsNotified);
+router.route('/automatic-release').post(authenticateUser, authorizePermissions('admin'), processAutomaticReleases);
 
 router
   .route('/')
