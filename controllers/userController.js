@@ -26,16 +26,18 @@ const showCurrentUser = async (req, res) => {
 };
 
 const updateUser = async (req, res) => {
-  const { email, name, dni, phone } = req.body;
+  const { email, name, dni, phone, mercadoPagoAccount, cryptoWallet } = req.body;
   if (!email || !name) {
-    throw new CustomError.BadRequestError('Please provide all values');
+    throw new CustomError.BadRequestError('Please provide all values (name and email)');
   }
   const user = await User.findOne({ _id: req.user.userId });
 
   user.email = email;
   user.name = name;
-  if (dni) user.dni = dni;
-  if (phone) user.phone = phone;
+  if (dni !== undefined) user.dni = dni;
+  if (phone !== undefined) user.phone = phone;
+  if (mercadoPagoAccount !== undefined) user.mercadoPagoAccount = mercadoPagoAccount;
+  if (cryptoWallet !== undefined) user.cryptoWallet = cryptoWallet;
 
   await user.save();
 

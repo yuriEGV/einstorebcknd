@@ -40,6 +40,14 @@ const UserSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  mercadoPagoAccount: {
+    type: String,
+    default: '',
+  },
+  cryptoWallet: {
+    type: String,
+    default: '',
+  },
 });
 
 UserSchema.pre('save', async function () {
