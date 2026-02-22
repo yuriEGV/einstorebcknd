@@ -46,6 +46,10 @@ app.use(cookieParser(process.env.JWT_SECRET));
 app.use(express.static('./public'));
 app.use(fileUpload());
 
+app.get('/', (req, res) => {
+  res.send('<h1>Einstore API is running</h1><p>Visit <a href="/api/v1/products">/api/v1/products</a> to see products.</p>');
+});
+
 app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/users', userRouter);
 app.use('/api/v1/products', productRouter);
@@ -64,8 +68,11 @@ const start = async () => {
         console.log(`Server is listening on port ${port}...`)
       );
     }
+    console.log('Successfully connected to MongoDB');
   } catch (error) {
+    console.log('Error connecting to MongoDB:');
     console.log(error);
+    process.exit(1);
   }
 };
 
