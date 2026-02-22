@@ -11,6 +11,7 @@ const helmet = require('helmet');
 const xss = require('xss-clean');
 const cors = require('cors');
 const mongoSanitize = require('express-mongo-sanitize');
+const mongoose = require('mongoose');
 
 // database
 const connectDB = require('./db/connect');
@@ -78,6 +79,20 @@ app.use(cookieParser(process.env.JWT_SECRET));
 app.use(express.static('./public'));
 app.use(fileUpload());
 
+// Place before routes
+app.use(async (req, res, next) => {
+  if (mongoose.connection.readyState !== 1) {
+    try {
+      await connectDB(process.env.MONGO_URL);
+      console.log('Connected to MongoDB via middleware');
+    } catch (error) {
+      console.error('MongoDB connection error in middleware:', error);
+      return res.status(500).json({ msg: 'Database connection failed' });
+    }
+  }
+  next();
+});
+
 app.get('/', (req, res) => {
   res.send('<h1>Einstore API is running</h1>');
 });
@@ -94,16 +109,18 @@ app.use(errorHandlerMiddleware);
 
 const port = process.env.PORT || 5000;
 const start = async () => {
+  if (process.env.VERCEL) {
+    console.log('Running on Vercel, skipping manual app.listen');
+    return;
+  }
   try {
     await connectDB(process.env.MONGO_URL);
-    if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
-      app.listen(port, () =>
-        console.log(`Server is listening on port ${port}...`)
-      );
-    }
+    app.listen(port, () =>
+      console.log(`Server is listening on port ${port}...`)
+    );
     console.log('Successfully connected to MongoDB');
   } catch (error) {
-    console.log(error);
+    console.error('Start-up connection error:', error);
   }
 };
 
