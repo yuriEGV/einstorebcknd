@@ -28,6 +28,14 @@ const UserSchema = new mongoose.Schema({
     enum: ['admin', 'user'],
     default: 'user',
   },
+  dni: {
+    type: String,
+    default: '',
+  },
+  phone: {
+    type: String,
+    default: '',
+  },
   isVerifiedSeller: {
     type: Boolean,
     default: false,

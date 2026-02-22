@@ -25,6 +25,20 @@ const createReview = async (req, res) => {
     );
   }
 
+  // Check if user has purchased the product (Order status should be 'paid' or 'delivered')
+  const Order = require('../models/Order');
+  const hasPurchased = await Order.findOne({
+    user: req.user.userId,
+    status: { $in: ['paid', 'delivered'] },
+    'orderItems.product': productId,
+  });
+
+  if (!hasPurchased) {
+    throw new CustomError.BadRequestError(
+      'You must purchase the product to leave a review'
+    );
+  }
+
   req.body.user = req.user.userId;
   const review = await Review.create(req.body);
   res.status(StatusCodes.CREATED).json({ review });

@@ -71,6 +71,10 @@ const createOrder = async (req, res) => {
         pending: `${process.env.FRONTEND_URL}/dashboard`,
       },
       auto_return: 'approved',
+      payer: {
+        email: req.user.email || 'test_user_123@testuser.com', // MP requires a valid-looking email
+        name: req.user.name,
+      },
     };
 
     const response = await preference.create({ body });
