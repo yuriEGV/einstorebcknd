@@ -1,6 +1,7 @@
 const Product = require('../models/Product');
 const { StatusCodes } = require('http-status-codes');
 const CustomError = require('../errors');
+const { checkPermissions } = require('../utils');
 const path = require('path');
 const mongoose = require('mongoose');
 const { Readable } = require('stream');
@@ -47,6 +48,8 @@ const updateProduct = async (req, res) => {
     throw new CustomError.NotFoundError(`No product with id : ${productId}`);
   }
 
+  checkPermissions(req.user, existingProduct.user);
+
   // If new image is provided, delete old GridFS image if applicable
   if (req.body.image && existingProduct.image && req.body.image !== existingProduct.image) {
     if (existingProduct.image.includes('/api/v1/products/image/')) {
@@ -75,6 +78,8 @@ const deleteProduct = async (req, res) => {
   if (!product) {
     throw new CustomError.NotFoundError(`No product with id : ${productId}`);
   }
+
+  checkPermissions(req.user, product.user);
 
   if (product.image && product.image.includes('/api/v1/products/image/')) {
     const filename = product.image.split('/').pop();

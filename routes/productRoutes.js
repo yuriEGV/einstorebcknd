@@ -19,7 +19,7 @@ const { getSingleProductReviews } = require('../controllers/reviewController');
 
 router
   .route('/')
-  .post([authenticateUser, authorizePermissions('admin')], createProduct)
+  .post([authenticateUser, authorizePermissions('admin', 'user')], createProduct)
   .get(getAllProducts);
 
 router
@@ -33,8 +33,8 @@ router
 router
   .route('/:id')
   .get(getSingleProduct)
-  .patch([authenticateUser, authorizePermissions('admin')], updateProduct)
-  .delete([authenticateUser, authorizePermissions('admin')], deleteProduct);
+  .patch([authenticateUser, authorizePermissions('admin', 'user')], updateProduct)
+  .delete([authenticateUser, authorizePermissions('admin', 'user')], deleteProduct);
 
 router.route('/:id/reviews').get(getSingleProductReviews);
 
