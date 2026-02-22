@@ -12,6 +12,7 @@ const {
   updateProduct,
   deleteProduct,
   uploadImage,
+  getGridFSImage,
 } = require('../controllers/productController');
 
 const { getSingleProductReviews } = require('../controllers/reviewController');
@@ -24,6 +25,10 @@ router
 router
   .route('/upload')
   .post(authenticateUser, uploadImage);
+
+router
+  .route('/image/:filename')
+  .get(getGridFSImage);
 
 router
   .route('/:id')

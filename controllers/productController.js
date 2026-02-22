@@ -2,6 +2,16 @@ const Product = require('../models/Product');
 const { StatusCodes } = require('http-status-codes');
 const CustomError = require('../errors');
 const path = require('path');
+const mongoose = require('mongoose');
+const { Readable } = require('stream');
+
+let bucket;
+mongoose.connection.on('connected', () => {
+  const db = mongoose.connections[0].db;
+  bucket = new mongoose.mongo.GridFSBucket(db, {
+    bucketName: 'productImages',
+  });
+});
 
 const createProduct = async (req, res) => {
   req.body.user = req.user.userId;
@@ -32,14 +42,28 @@ const getSingleProduct = async (req, res) => {
 const updateProduct = async (req, res) => {
   const { id: productId } = req.params;
 
+  const existingProduct = await Product.findOne({ _id: productId });
+  if (!existingProduct) {
+    throw new CustomError.NotFoundError(`No product with id : ${productId}`);
+  }
+
+  // If new image is provided, delete old GridFS image if applicable
+  if (req.body.image && existingProduct.image && req.body.image !== existingProduct.image) {
+    if (existingProduct.image.includes('/api/v1/products/image/')) {
+      const filename = existingProduct.image.split('/').pop();
+      if (bucket) {
+        const files = await bucket.find({ filename }).toArray();
+        if (files && files.length > 0) {
+          await bucket.delete(files[0]._id);
+        }
+      }
+    }
+  }
+
   const product = await Product.findOneAndUpdate({ _id: productId }, req.body, {
     new: true,
     runValidators: true,
   });
-
-  if (!product) {
-    throw new CustomError.NotFoundError(`No product with id : ${productId}`);
-  }
 
   res.status(StatusCodes.OK).json({ product });
 };
@@ -52,11 +76,21 @@ const deleteProduct = async (req, res) => {
     throw new CustomError.NotFoundError(`No product with id : ${productId}`);
   }
 
-  await product.remove();
+  if (product.image && product.image.includes('/api/v1/products/image/')) {
+    const filename = product.image.split('/').pop();
+    if (bucket) {
+      const files = await bucket.find({ filename }).toArray();
+      if (files && files.length > 0) {
+        await bucket.delete(files[0]._id);
+      }
+    }
+  }
+
+  await Product.deleteOne({ _id: productId });
   res.status(StatusCodes.OK).json({ msg: 'Success! Product removed.' });
 };
 const uploadImage = async (req, res) => {
-  if (!req.files) {
+  if (!req.files || !req.files.image) {
     throw new CustomError.BadRequestError('No File Uploaded');
   }
   const productImage = req.files.image;
@@ -66,34 +100,59 @@ const uploadImage = async (req, res) => {
   }
 
   const maxSize = 1024 * 1024;
-
   if (productImage.size > maxSize) {
-    throw new CustomError.BadRequestError(
-      'Please upload image smaller than 1MB'
-    );
+    throw new CustomError.BadRequestError('Please upload image smaller than 1MB');
   }
 
-  const uploadsDir = path.join(__dirname, '../public/uploads/');
-
-  // Ensure directory exists
-  const fs = require('fs');
-  try {
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
-  } catch (err) {
-    console.error('Directory error:', err);
+  if (!bucket) {
+    throw new CustomError.InternalServerError('Database connection not established for GridFS');
   }
 
-  const imagePath = path.join(uploadsDir, `${productImage.name}`);
+  // Create a unique filename to avoid collisions
+  const fileName = `${Date.now()}-${productImage.name}`;
+  const uploadStream = bucket.openUploadStream(fileName, {
+    contentType: productImage.mimetype,
+  });
 
-  try {
-    await productImage.mv(imagePath);
-    res.status(StatusCodes.OK).json({ image: `/uploads/${productImage.name}` });
-  } catch (err) {
-    console.error('Move error:', err);
-    throw new CustomError.BadRequestError(`Upload failed: ${err.message}`);
+  const bufferStream = new Readable();
+  bufferStream.push(productImage.data);
+  bufferStream.push(null);
+
+  await new Promise((resolve, reject) => {
+    bufferStream.pipe(uploadStream)
+      .on('error', reject)
+      .on('finish', resolve);
+  });
+
+  res.status(StatusCodes.OK).json({ image: `/api/v1/products/image/${fileName}` });
+};
+
+const getGridFSImage = async (req, res) => {
+  const { filename } = req.params;
+
+  if (!bucket) {
+    throw new CustomError.InternalServerError('Database connection not established');
   }
+
+  const files = await bucket.find({ filename }).toArray();
+  if (!files || files.length === 0) {
+    throw new CustomError.NotFoundError(`No image found with name: ${filename}`);
+  }
+
+  res.set('Content-Type', files[0].contentType);
+  const downloadStream = bucket.openDownloadStreamByName(filename);
+
+  downloadStream.on('data', (chunk) => {
+    res.write(chunk);
+  });
+
+  downloadStream.on('error', () => {
+    res.sendStatus(404);
+  });
+
+  downloadStream.on('end', () => {
+    res.end();
+  });
 };
 
 module.exports = {
@@ -103,4 +162,5 @@ module.exports = {
   updateProduct,
   deleteProduct,
   uploadImage,
+  getGridFSImage,
 };
