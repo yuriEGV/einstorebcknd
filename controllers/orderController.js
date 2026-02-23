@@ -7,7 +7,7 @@ const CustomError = require('../errors');
 const { checkPermissions } = require('../utils');
 
 const mercadopago = require('mercadopago');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
 const { sendOrderNotification } = require('../utils/twilio');
 
 // Configure Mercado Pago
