@@ -30,6 +30,12 @@ const errorHandlerMiddleware = require('./middleware/error-handler');
 
 app.set('trust proxy', 1);
 
+const loginLimiter = rateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: 'Too many login attempts from this IP, please try again after 15 minutes',
+});
+
 app.use(
   rateLimiter({
     windowMs: 15 * 60 * 1000,
@@ -42,10 +48,11 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
-        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://js.stripe.com"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://js.stripe.com"],
         imgSrc: ["'self'", "data:", "https://*"],
-        connectSrc: ["'self'", "https://api.mercadopago.com"],
+        connectSrc: ["'self'", "https://api.mercadopago.com", "https://api.stripe.com", "https://v6.exchangerate-api.com"],
+        frameSrc: ["'self'", "https://js.stripe.com"],
       },
     },
   })
@@ -96,6 +103,9 @@ app.use(async (req, res, next) => {
 app.get('/', (req, res) => {
   res.send('<h1>Einstore API is running</h1>');
 });
+
+// Apply login limiter only to the login route
+app.use('/api/v1/auth/login', loginLimiter);
 
 app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/users', userRouter);

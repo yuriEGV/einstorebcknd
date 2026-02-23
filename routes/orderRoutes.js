@@ -17,11 +17,13 @@ const {
   resolveDispute,
   markOrdersAsNotified,
   processAutomaticReleases,
+  stripeWebhook,
 } = require('../controllers/orderController');
 
 router.route('/stats/dashboard').get(authenticateUser, getDashboardStats);
 router.route('/mark-as-notified').patch(authenticateUser, markOrdersAsNotified);
 router.route('/automatic-release').post(authenticateUser, authorizePermissions('admin'), processAutomaticReleases);
+router.route('/stripe-webhook').post(express.raw({ type: 'application/json' }), stripeWebhook);
 
 router
   .route('/')

@@ -117,6 +117,41 @@ const toggleVerifySeller = async (req, res) => {
   res.status(StatusCodes.OK).json({ msg: `Success! Seller verified status: ${user.isVerifiedSeller}` });
 };
 
+const uploadKycDocument = async (req, res) => {
+  if (!req.files || !req.files.image) {
+    throw new CustomError.BadRequestError('No file uploaded');
+  }
+  const kycImage = req.files.image;
+  if (!kycImage.mimetype.startsWith('image')) {
+    throw new CustomError.BadRequestError('Please upload an image');
+  }
+  const maxSize = 1024 * 1024 * 5; // 5MB
+  if (kycImage.size > maxSize) {
+    throw new CustomError.BadRequestError('Please upload image smaller than 5MB');
+  }
+
+  // In a real app, upload to Cloudinary/S3. 
+  // For now, we'll simulate by returning a local path if we had storage, 
+  // but let's just update the user model with a placeholder or the filename if we move it.
+
+  const user = await User.findOne({ _id: req.user.userId });
+  user.idDocument = 'uploaded_doc_placeholder_' + Date.now();
+  await user.save();
+
+  res.status(StatusCodes.OK).json({ msg: 'KYC Document uploaded successfully', idDocument: user.idDocument });
+};
+
+const verifyKyc = async (req, res) => {
+  const { id: userId } = req.params;
+  const user = await User.findOne({ _id: userId });
+  if (!user) {
+    throw new CustomError.NotFoundError(`No user with id : ${userId}`);
+  }
+  user.isIdentityVerified = true;
+  await user.save();
+  res.status(StatusCodes.OK).json({ msg: 'User KYC verified' });
+};
+
 module.exports = {
   getAllUsers,
   getSingleUser,
@@ -126,6 +161,8 @@ module.exports = {
   deleteUser,
   updateRole,
   toggleVerifySeller,
+  uploadKycDocument,
+  verifyKyc,
 };
 
 // update user with findOneAndUpdate

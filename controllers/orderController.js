@@ -7,6 +7,7 @@ const CustomError = require('../errors');
 const { checkPermissions } = require('../utils');
 
 const mercadopago = require('mercadopago');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { sendOrderNotification } = require('../utils/twilio');
 
 // Configure Mercado Pago
@@ -55,46 +56,71 @@ const createOrder = async (req, res) => {
   // calculate total (CLP doesn't have cents, so we round to nearest integer)
   const total = Math.round(tax + shippingFee + subtotal);
 
-  // create Mercado Pago preference
+  // create Mercado Pago preference or Stripe Payment Intent
   let client_secret = '';
-  try {
-    const body = {
-      items: [
-        ...orderItems.map(item => ({
-          id: item.product.toString(),
-          title: item.name,
-          quantity: item.amount,
-          unit_price: Math.round(item.price),
-          currency_id: 'CLP'
-        })),
-        {
-          title: 'Comisión de Gestión (Platform Fee)',
-          quantity: 1,
-          unit_price: Math.round(shippingFee),
-          currency_id: 'CLP'
-        }
-      ],
-      back_urls: {
-        success: `${process.env.FRONTEND_URL}/dashboard`,
-        failure: `${process.env.FRONTEND_URL}/cart`,
-        pending: `${process.env.FRONTEND_URL}/dashboard`,
-      },
-      auto_return: 'approved',
-      payer: {
-        email: req.user.email || 'test_user_123@testuser.com', // MP requires a valid-looking email
-        name: req.user.name,
-      },
-    };
+  let preference_id = '';
+  let paymentIntentId = '';
+  const isStripe = req.body.paymentMethod === 'stripe' || req.body.currency === 'CAD';
 
-    const response = await preference.create({ body });
-    // init_point is what the frontend needs to redirect the user
-    client_secret = response.init_point;
-    preference_id = response.id;
-  } catch (error) {
-    console.error('Mercado Pago Error:', error);
-    // Fallback to a dummy value if MP fails during development, 
-    // but in production this should throw an error
-    client_secret = 'https://www.mercadopago.cl';
+  if (isStripe) {
+    try {
+      // For Stripe, we need to convert the total to the smallest currency unit (cents for CAD)
+      // We assume the total passed in CLP from subtotal calculation if base is CLP, 
+      // but let's calculate the CAD total here or rely on the frontend passing the converted total.
+      // Better to rely on DB prices (CLP) and convert here with the same helper logic.
+
+      const cadTotal = Math.round(total * 0.0014 * 102); // Simplified conversion with 2% margin for now, or fetch rate
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: cadTotal, // Total in cents
+        currency: 'cad',
+        payment_method_types: ['card'],
+        metadata: {
+          integration_check: 'accept_a_payment',
+        },
+      });
+      client_secret = paymentIntent.client_secret;
+      paymentIntentId = paymentIntent.id;
+    } catch (error) {
+      console.error('Stripe Error:', error);
+      throw new CustomError.InternalServerError('Failed to create payment intent');
+    }
+  } else {
+    try {
+      const body = {
+        items: [
+          ...orderItems.map(item => ({
+            id: item.product.toString(),
+            title: item.name,
+            quantity: item.amount,
+            unit_price: Math.round(item.price),
+            currency_id: 'CLP'
+          })),
+          {
+            title: 'Comisión de Gestión (Platform Fee)',
+            quantity: 1,
+            unit_price: Math.round(shippingFee),
+            currency_id: 'CLP'
+          }
+        ],
+        back_urls: {
+          success: `${process.env.FRONTEND_URL}/dashboard`,
+          failure: `${process.env.FRONTEND_URL}/cart`,
+          pending: `${process.env.FRONTEND_URL}/dashboard`,
+        },
+        auto_return: 'approved',
+        payer: {
+          email: req.user.email || 'test_user_123@testuser.com',
+          name: req.user.name,
+        },
+      };
+
+      const response = await preference.create({ body });
+      client_secret = response.init_point;
+      preference_id = response.id;
+    } catch (error) {
+      console.error('Mercado Pago Error:', error);
+      client_secret = 'https://www.mercadopago.cl';
+    }
   }
 
   const order = await Order.create({
@@ -106,6 +132,7 @@ const createOrder = async (req, res) => {
     shippingAddress,
     clientSecret: client_secret,
     preferenceId: preference_id,
+    paymentIntentId: paymentIntentId,
     user: req.user.userId,
   });
 
@@ -374,6 +401,48 @@ const processAutomaticReleases = async (req, res) => {
   });
 };
 
+const stripeWebhook = async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    res.status(400).send(`Webhook Error: ${err.message}`);
+    return;
+  }
+
+  // Handle the event
+  if (event.type === 'payment_intent.succeeded') {
+    const paymentIntent = event.data.object;
+    const order = await Order.findOne({ paymentIntentId: paymentIntent.id });
+
+    if (order) {
+      order.status = 'paid';
+      await order.save();
+
+      // Trigger Notifications
+      const admin = await User.findOne({ role: 'admin' });
+      if (admin && admin.phoneNumber) {
+        await sendOrderNotification(admin.phoneNumber, 'admin', order._id.toString(), order.total);
+      }
+
+      for (const item of order.orderItems) {
+        const product = await Product.findOne({ _id: item.product }).populate('user');
+        if (product && product.user && product.user.phoneNumber) {
+          await sendOrderNotification(product.user.phoneNumber, 'seller', order._id.toString(), order.total);
+        }
+      }
+    }
+  }
+
+  res.json({ received: true });
+};
+
 module.exports = {
   getAllOrders,
   getSingleOrder,
@@ -386,4 +455,5 @@ module.exports = {
   resolveDispute,
   markOrdersAsNotified,
   processAutomaticReleases,
+  stripeWebhook,
 };

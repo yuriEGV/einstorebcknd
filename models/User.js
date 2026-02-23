@@ -48,6 +48,14 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: '',
   },
+  idDocument: {
+    type: String,
+    default: '',
+  },
+  isIdentityVerified: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 UserSchema.pre('save', async function () {

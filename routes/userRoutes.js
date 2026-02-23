@@ -13,12 +13,16 @@ const {
   updateRole,
   toggleVerifySeller,
   deleteUser,
+  uploadKycDocument,
+  verifyKyc,
 } = require('../controllers/userController');
 
 router
   .route('/')
   .get(authenticateUser, authorizePermissions('admin'), getAllUsers);
 
+router.route('/uploadKyc').post(authenticateUser, uploadKycDocument);
+router.route('/verifyKyc/:id').patch(authenticateUser, authorizePermissions('admin'), verifyKyc);
 router.route('/showMe').get(authenticateUser, showCurrentUser);
 router.route('/updateUser').patch(authenticateUser, updateUser);
 router.route('/updateUserPassword').patch(authenticateUser, updateUserPassword);
