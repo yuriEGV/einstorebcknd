@@ -82,7 +82,7 @@ const createOrder = async (req, res) => {
       paymentIntentId = paymentIntent.id;
     } catch (error) {
       console.error('Stripe Error:', error);
-      throw new CustomError.InternalServerError('Failed to create payment intent');
+      throw new CustomError.BadRequestError('Failed to create payment intent. Please try again.');
     }
   } else {
     try {
