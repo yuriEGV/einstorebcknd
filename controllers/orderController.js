@@ -66,6 +66,9 @@ const createOrder = async (req, res) => {
   // calculate total (CLP doesn't have cents, so we round to nearest integer)
   const total = Math.round(tax + shippingFee + subtotal);
 
+  const firstProduct = await Product.findOne({ _id: cartItems[0].product });
+  const sellerId = firstProduct.user;
+
   const order = await Order.create({
     orderItems,
     total,
@@ -78,6 +81,7 @@ const createOrder = async (req, res) => {
     preferenceId: '', // Will be updated
     paymentIntentId: '', // Will be updated
     user: req.user.userId,
+    seller: sellerId,
   });
 
   // create Mercado Pago preference or Stripe Payment Intent
@@ -156,11 +160,13 @@ const getAllOrders = async (req, res) => {
 };
 const getSingleOrder = async (req, res) => {
   const { id: orderId } = req.params;
-  const order = await Order.findOne({ _id: orderId });
+  const order = await Order.findOne({ _id: orderId })
+    .populate('user', 'name email phone avatar isIdentityVerified')
+    .populate('seller', 'name email phone avatar isIdentityVerified');
   if (!order) {
     throw new CustomError.NotFoundError(`No order with id : ${orderId}`);
   }
-  checkPermissions(req.user, order.user);
+  checkPermissions(req.user, order.user._id);
   res.status(StatusCodes.OK).json({ order });
 };
 const getCurrentUserOrders = async (req, res) => {
@@ -231,11 +237,9 @@ const updateOrder = async (req, res) => {
       await sendOrderNotification(admin.phoneNumber, 'admin', order._id.toString(), order.total);
     }
 
-    for (const item of order.orderItems) {
-      const product = await Product.findOne({ _id: item.product }).populate('user');
-      if (product && product.user && product.user.phoneNumber) {
-        await sendOrderNotification(product.user.phoneNumber, 'seller', order._id.toString(), order.total);
-      }
+    const sellerUser = await User.findById(order.seller);
+    if (sellerUser && sellerUser.phoneNumber) {
+      await sendOrderNotification(sellerUser.phoneNumber, 'seller', order._id.toString(), order.total);
     }
   }
 
@@ -295,23 +299,10 @@ const getDashboardStats = async (req, res) => {
 };
 
 const getSellerOrders = async (req, res) => {
-  const userId = req.user.userId;
-  const orders = await Order.find({ status: 'paid' });
-
-  const sellerOrders = [];
-  for (const order of orders) {
-    let hasSellerProduct = false;
-    for (const item of order.orderItems) {
-      const product = await Product.findOne({ _id: item.product });
-      if (product && product.user.toString() === userId) {
-        hasSellerProduct = true;
-        break;
-      }
-    }
-    if (hasSellerProduct) sellerOrders.push(order);
-  }
-
-  res.status(StatusCodes.OK).json({ orders: sellerOrders, count: sellerOrders.length });
+  const orders = await Order.find({ seller: req.user.userId })
+    .populate('user', 'name email phone avatar isIdentityVerified')
+    .populate('seller', 'name email phone avatar isIdentityVerified');
+  res.status(StatusCodes.OK).json({ orders, count: orders.length });
 };
 
 const createDispute = async (req, res) => {
@@ -460,11 +451,9 @@ const stripeWebhook = async (req, res) => {
         await sendOrderNotification(admin.phoneNumber, 'admin', order._id.toString(), order.total);
       }
 
-      for (const item of order.orderItems) {
-        const product = await Product.findOne({ _id: item.product }).populate('user');
-        if (product && product.user && product.user.phoneNumber) {
-          await sendOrderNotification(product.user.phoneNumber, 'seller', order._id.toString(), order.total);
-        }
+      const sellerUser = await User.findById(order.seller);
+      if (sellerUser && sellerUser.phoneNumber) {
+        await sendOrderNotification(sellerUser.phoneNumber, 'seller', order._id.toString(), order.total);
       }
     }
   }
