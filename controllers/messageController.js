@@ -19,7 +19,7 @@ const sendMessage = async (req, res) => {
     }
 
     // Allow chat for paid, shipped or delivered orders
-    const currentStatus = (order.status || '').trim();
+    const currentStatus = (order.status || '').trim().toLowerCase();
     console.log(`[Chat] Order ${orderId} status: "${currentStatus}"`);
     const allowedStatuses = ['paid', 'shipped', 'delivered'];
     if (!allowedStatuses.includes(currentStatus)) {
