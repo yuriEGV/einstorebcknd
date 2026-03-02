@@ -7,14 +7,14 @@ const CustomError = require('../errors');
 const { checkPermissions } = require('../utils');
 
 const mercadopago = require('mercadopago');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { sendOrderNotification } = require('../utils/twilio');
 
 // Configure Mercado Pago
 // Note: In production, use the user's access token from process.env
 // The SDK v2 usage changed slightly.
 const client = new mercadopago.MercadoPagoConfig({
-  accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN || 'TEST-2299052579750357-121008-b4c281df8d8b6727284429990b793392-127926189',
+  accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN,
 });
 const preference = new mercadopago.Preference(client);
 
