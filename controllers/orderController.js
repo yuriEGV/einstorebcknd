@@ -18,6 +18,16 @@ const client = new mercadopago.MercadoPagoConfig({
 });
 const preference = new mercadopago.Preference(client);
 
+const updateInventory = async (orderItems) => {
+  for (const item of orderItems) {
+    const product = await Product.findOne({ _id: item.product });
+    if (product) {
+      product.inventory = Math.max(0, product.inventory - item.amount);
+      await product.save();
+    }
+  }
+};
+
 const createOrder = async (req, res) => {
   const { items: cartItems, tax, shippingFee, shippingAddress, deliveryMethod } = req.body;
 
@@ -56,6 +66,20 @@ const createOrder = async (req, res) => {
   // calculate total (CLP doesn't have cents, so we round to nearest integer)
   const total = Math.round(tax + shippingFee + subtotal);
 
+  const order = await Order.create({
+    orderItems,
+    total,
+    subtotal,
+    tax,
+    shippingFee,
+    shippingAddress,
+    deliveryMethod: deliveryMethod || 'delivery',
+    clientSecret: '', // Will be updated
+    preferenceId: '', // Will be updated
+    paymentIntentId: '', // Will be updated
+    user: req.user.userId,
+  });
+
   // create Mercado Pago preference or Stripe Payment Intent
   let client_secret = '';
   let preference_id = '';
@@ -64,25 +88,20 @@ const createOrder = async (req, res) => {
 
   if (isStripe) {
     try {
-      // For Stripe, we need to convert the total to the smallest currency unit (cents for CAD)
-      // We assume the total passed in CLP from subtotal calculation if base is CLP, 
-      // but let's calculate the CAD total here or rely on the frontend passing the converted total.
-      // Better to rely on DB prices (CLP) and convert here with the same helper logic.
-
-      const cadTotal = Math.round(total * 0.0014 * 102); // Simplified conversion with 2% margin for now, or fetch rate
+      const cadTotal = Math.round(total * 0.0014 * 102);
       const paymentIntent = await stripe.paymentIntents.create({
-        amount: cadTotal, // Total in cents
+        amount: cadTotal,
         currency: 'cad',
         payment_method_types: ['card'],
         metadata: {
-          integration_check: 'accept_a_payment',
+          orderId: order._id.toString(),
         },
       });
       client_secret = paymentIntent.client_secret;
       paymentIntentId = paymentIntent.id;
     } catch (error) {
       console.error('Stripe Error:', error);
-      throw new CustomError.BadRequestError('Failed to create payment intent. Please try again.');
+      throw new CustomError.BadRequestError('Failed to create payment intent.');
     }
   } else {
     try {
@@ -103,15 +122,16 @@ const createOrder = async (req, res) => {
           }
         ],
         back_urls: {
-          success: `${process.env.FRONTEND_URL}/dashboard`,
+          success: `${process.env.FRONTEND_URL}/success?orderId=${order._id}`,
           failure: `${process.env.FRONTEND_URL}/cart`,
-          pending: `${process.env.FRONTEND_URL}/dashboard`,
+          pending: `${process.env.FRONTEND_URL}/success?orderId=${order._id}`,
         },
         auto_return: 'approved',
         payer: {
           email: req.user.email || 'test_user_123@testuser.com',
           name: req.user.name,
         },
+        external_reference: order._id.toString(),
       };
 
       const response = await preference.create({ body });
@@ -123,23 +143,12 @@ const createOrder = async (req, res) => {
     }
   }
 
-  const order = await Order.create({
-    orderItems,
-    total,
-    subtotal,
-    tax,
-    shippingFee,
-    shippingAddress,
-    deliveryMethod: deliveryMethod || 'delivery',
-    clientSecret: client_secret,
-    preferenceId: preference_id,
-    paymentIntentId: paymentIntentId,
-    user: req.user.userId,
-  });
+  order.clientSecret = client_secret;
+  order.preferenceId = preference_id;
+  order.paymentIntentId = paymentIntentId;
+  await order.save();
 
-  res
-    .status(StatusCodes.CREATED)
-    .json({ order });
+  res.status(StatusCodes.CREATED).json({ order });
 };
 const getAllOrders = async (req, res) => {
   const orders = await Order.find({});
@@ -208,6 +217,9 @@ const updateOrder = async (req, res) => {
   else if (paymentIntentId) {
     order.paymentIntentId = paymentIntentId;
     order.status = 'paid';
+
+    // Update Inventory
+    await updateInventory(order.orderItems);
 
     // Explicitly set notification flags (already default, but safe for legacy/updates)
     order.isAdminNotified = false;
@@ -439,6 +451,7 @@ const stripeWebhook = async (req, res) => {
 
     if (order) {
       order.status = 'paid';
+      await updateInventory(order.orderItems);
       await order.save();
 
       // Trigger Notifications
