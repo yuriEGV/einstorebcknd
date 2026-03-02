@@ -233,13 +233,13 @@ const updateOrder = async (req, res) => {
 
     // Trigger Notifications
     const admin = await User.findOne({ role: 'admin' });
-    if (admin && admin.phoneNumber) {
-      await sendOrderNotification(admin.phoneNumber, 'admin', order._id.toString(), order.total);
+    if (admin && admin.phone) {
+      await sendOrderNotification(admin.phone, 'admin', order._id.toString(), order.total);
     }
 
     const sellerUser = await User.findById(order.seller);
-    if (sellerUser && sellerUser.phoneNumber) {
-      await sendOrderNotification(sellerUser.phoneNumber, 'seller', order._id.toString(), order.total);
+    if (sellerUser && sellerUser.phone) {
+      await sendOrderNotification(sellerUser.phone, 'seller', order._id.toString(), order.total);
     }
   }
 
@@ -447,13 +447,13 @@ const stripeWebhook = async (req, res) => {
 
       // Trigger Notifications
       const admin = await User.findOne({ role: 'admin' });
-      if (admin && admin.phoneNumber) {
-        await sendOrderNotification(admin.phoneNumber, 'admin', order._id.toString(), order.total);
+      if (admin && admin.phone) {
+        await sendOrderNotification(admin.phone, 'admin', order._id.toString(), order.total);
       }
 
       const sellerUser = await User.findById(order.seller);
-      if (sellerUser && sellerUser.phoneNumber) {
-        await sendOrderNotification(sellerUser.phoneNumber, 'seller', order._id.toString(), order.total);
+      if (sellerUser && sellerUser.phone) {
+        await sendOrderNotification(sellerUser.phone, 'seller', order._id.toString(), order.total);
       }
     }
   }
