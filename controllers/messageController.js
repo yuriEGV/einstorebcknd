@@ -19,9 +19,11 @@ const sendMessage = async (req, res) => {
     }
 
     // Allow chat for paid, shipped or delivered orders
+    const currentStatus = (order.status || '').trim();
+    console.log(`[Chat] Order ${orderId} status: "${currentStatus}"`);
     const allowedStatuses = ['paid', 'shipped', 'delivered'];
-    if (!allowedStatuses.includes(order.status)) {
-        throw new CustomError.BadRequestError(`El chat solo está disponible para órdenes pagadas o en proceso (Estado actual: ${order.status})`);
+    if (!allowedStatuses.includes(currentStatus)) {
+        throw new CustomError.BadRequestError(`El chat solo está disponible para órdenes pagadas o en proceso (Estado actual: ${currentStatus})`);
     }
 
     if (order.isChatBlocked) {

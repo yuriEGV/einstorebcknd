@@ -7,12 +7,20 @@ const mongoose = require('mongoose');
 const { Readable } = require('stream');
 
 let bucket;
+const initBucket = () => {
+  if (mongoose.connection.readyState === 1 && !bucket) {
+    bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
+      bucketName: 'productImages',
+    });
+  }
+};
+
 mongoose.connection.on('connected', () => {
-  const db = mongoose.connections[0].db;
-  bucket = new mongoose.mongo.GridFSBucket(db, {
-    bucketName: 'productImages',
-  });
+  initBucket();
 });
+
+// Also try to init immediately in case already connected
+initBucket();
 
 const createProduct = async (req, res) => {
   req.body.user = req.user.userId;
