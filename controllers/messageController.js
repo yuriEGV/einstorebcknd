@@ -18,9 +18,10 @@ const sendMessage = async (req, res) => {
         throw new CustomError.NotFoundError(`No order with id : ${orderId}`);
     }
 
-    // For now, let's just ensure the order is paid
-    if (order.status !== 'paid' && order.status !== 'delivered') {
-        throw new CustomError.BadRequestError('Chat is only available for paid orders');
+    // Allow chat for paid, shipped or delivered orders
+    const allowedStatuses = ['paid', 'shipped', 'delivered'];
+    if (!allowedStatuses.includes(order.status)) {
+        throw new CustomError.BadRequestError(`El chat solo está disponible para órdenes pagadas o en proceso (Estado actual: ${order.status})`);
     }
 
     if (order.isChatBlocked) {
@@ -38,27 +39,31 @@ const sendMessage = async (req, res) => {
     // If sender is buyer, receiver is seller(s). 
     // For simplicity, we notify the seller of the first product in the order.
     try {
-        const isBuyer = order.user.toString() === req.user.userId;
+        const isBuyer = order.user && order.user.toString() === req.user.userId;
         let receiverId;
 
         if (isBuyer) {
             // Receiver is seller
-            const firstProduct = await Product.findById(order.orderItems[0].product);
-            receiverId = firstProduct.user;
+            if (order.seller) {
+                receiverId = order.seller;
+            } else if (order.orderItems && order.orderItems.length > 0) {
+                const firstProduct = await Product.findById(order.orderItems[0].product);
+                receiverId = firstProduct ? firstProduct.user : null;
+            }
         } else {
             // Receiver is buyer
             receiverId = order.user;
         }
 
-        const receiver = await User.findById(receiverId);
-        const productName = order.orderItems[0].name;
+        if (receiverId) {
+            const receiver = await User.findById(receiverId);
+            const productName = (order.orderItems && order.orderItems.length > 0) ? order.orderItems[0].name : "Tu Pedido";
 
-        if (receiver && receiver.phone) {
-            // Normalize phone for WhatsApp (replace + with nothing but keep country code if Twilio needs it)
-            // Twilio usually likes the full E.164 without the '+' for some params or with it. 
-            // Our sendWhatsAppNotification adds 'whatsapp:' prefix.
-            const phone = receiver.phone.replace(/[\s\-\(\)]/g, '');
-            await sendWhatsAppNotification(phone, productName, orderId);
+            if (receiver && receiver.phone) {
+                const phone = receiver.phone.replace(/[\s\-\(\)]/g, '');
+                // Non-blocking notification
+                sendWhatsAppNotification(phone, productName, orderId).catch(e => console.error("Twilio error:", e));
+            }
         }
     } catch (error) {
         console.error('WhatsApp notification fail-safe:', error);
