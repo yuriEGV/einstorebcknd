@@ -48,7 +48,6 @@ const OrderSchema = mongoose.Schema(
     },
     clientSecret: {
       type: String,
-      required: true,
     },
     preferenceId: {
       type: String,
