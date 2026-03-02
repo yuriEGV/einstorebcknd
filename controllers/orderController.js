@@ -19,7 +19,7 @@ const client = new mercadopago.MercadoPagoConfig({
 const preference = new mercadopago.Preference(client);
 
 const createOrder = async (req, res) => {
-  const { items: cartItems, tax, shippingFee, shippingAddress } = req.body;
+  const { items: cartItems, tax, shippingFee, shippingAddress, deliveryMethod } = req.body;
 
   if (!cartItems || cartItems.length < 1) {
     throw new CustomError.BadRequestError('No cart items provided');
@@ -130,6 +130,7 @@ const createOrder = async (req, res) => {
     tax,
     shippingFee,
     shippingAddress,
+    deliveryMethod: deliveryMethod || 'delivery',
     clientSecret: client_secret,
     preferenceId: preference_id,
     paymentIntentId: paymentIntentId,
@@ -159,7 +160,7 @@ const getCurrentUserOrders = async (req, res) => {
 };
 const updateOrder = async (req, res) => {
   const { id: orderId } = req.params;
-  const { status, paymentIntentId } = req.body;
+  const { status, paymentIntentId, isPickupReady } = req.body;
 
   const order = await Order.findOne({ _id: orderId });
   if (!order) {
@@ -187,6 +188,21 @@ const updateOrder = async (req, res) => {
       throw new CustomError.UnauthorizedError('Only the buyer can confirm delivery');
     }
     order.status = 'delivered';
+  }
+  // If status is 'pickup_ready', verify requester is the/a seller
+  else if (isPickupReady !== undefined) {
+    let isSeller = false;
+    for (const item of order.orderItems) {
+      const product = await Product.findOne({ _id: item.product });
+      if (product && product.user.toString() === req.user.userId) {
+        isSeller = true;
+        break;
+      }
+    }
+    if (!isSeller && req.user.role !== 'admin') {
+      throw new CustomError.UnauthorizedError('Only the seller can mark as ready for pickup');
+    }
+    order.isPickupReady = isPickupReady;
   }
   // Default legacy behavior for payment completion
   else if (paymentIntentId) {

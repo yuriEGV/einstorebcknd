@@ -71,6 +71,15 @@ const OrderSchema = mongoose.Schema(
       type: String,
       default: '',
     },
+    deliveryMethod: {
+      type: String,
+      enum: ['delivery', 'pickup'],
+      default: 'delivery',
+    },
+    isPickupReady: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );
